@@ -148,7 +148,8 @@ void add(struct HashSet *H,int hash_code, int val, int reentrant){
     if(!reentrant) lock_set(H,hash_code);
     int bucket_index = hash_code % H->capacity;
     list_add(H,bucket_index,val,hash_code);
-    H->setSize++;
+    //H->setSize++;
+    __sync_fetch_and_add(&(H->setSize),1);
     if(!reentrant) unlock_set(H,hash_code);
     if (policy(H)) resize(H);
 }
@@ -158,7 +159,8 @@ int delete(struct HashSet *H,int hash_code, int val){
     lock_set(H,hash_code);
     int bucket_index =  hash_code % H->capacity;
     int res=list_delete(H,bucket_index,val);
-    H->setSize--;
+    //H->setSize--;
+    __sync_fetch_and_sub(&(H->setSize),1);
     unlock_set(H,hash_code);
     return res;
 }
@@ -220,7 +222,7 @@ void main(int argc,char * argv[]){
     int i,j;
     #pragma omp parallel for num_threads(5) shared(H) private(i,j)
     for(j=0;j<5;j++){
-        for(i=0;i<11;i++){
+        for(i=0;i<10;i++){
             add(H,i+j*10,i+j*10,0);
             //add(H,rand(),i,0);
         }
@@ -232,6 +234,7 @@ void main(int argc,char * argv[]){
     }
     */
     print_set(H);
+    printf("%d \n",H->setSize);
     return;
 
     
