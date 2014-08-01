@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include "timers_lib.h"
 
 // node of a list (bucket)
 struct node_t{
@@ -214,27 +215,102 @@ void print_set(struct HashSet * H){
     }
 }
 
+/* Arrange the N elements of ARRAY in random order.
+   Only effective if N is much smaller than RAND_MAX;
+   if this may not be the case, use a better random
+   number generator. */
+void shuffle(int *array, size_t n)
+{
+    if (n > 1) 
+    {
+        size_t i;
+        for (i = 0; i < n - 1; i++) 
+        {
+          size_t j = i + rand() / (RAND_MAX / (n - i) + 1);
+          int t = array[j];
+          array[j] = array[i];
+          array[i] = t;
+        }
+    }
+}
 void main(int argc,char * argv[]){
 
+    int num_threads=atoi(argv[1]);
     struct HashSet * H=(struct HashSet *) malloc(sizeof(struct HashSet));
     initialize(H,10);
     srand(time(NULL));
     int i,j;
-    #pragma omp parallel for num_threads(5) shared(H) private(i,j)
-    for(j=0;j<5;j++){
-        for(i=0;i<10;i++){
-            add(H,i+j*10,i+j*10,0);
+    /*#pragma omp parallel for num_threads(8) shared(H) private(i,j)
+    for(j=0;j<8;j++){
+        for(i=0;i<100000;i++){
+            add(H,i+j*100000,i+j*100000,0);
             //add(H,rand(),i,0);
         }
     }
-    
+    */
+    /*
+    timer_tt * timer;
+    timer = timer_init(timer);
+    timer_start(timer);
+    int * op_table;
+    int res,c;
+    #pragma omp parallel for num_threads(num_threads) shared(H) private(c,j,res,op_table)
+    for(i=0;i<num_threads;i++){
+        op_table = (int *)malloc(sizeof(int)*(1000000/num_threads));
+        for(j=0;j<(1000000/num_threads);j++) op_table[j]=rand()%10000;
+        for(j=0;j<(1000000/num_threads);j++){
+            add(H,op_table[j],op_table[j],0);
+        }
+    }
+    timer_stop(timer);
+    double result=timer_report_sec(timer);
+    printf(" timer result %lf \n",result);
+    */
+
+    int finds=200000/num_threads;
+    int deletes=0/num_threads;
+    int inserts=800000/num_threads;
+    timer_tt * timer;
+    int * value_table;
+    int * op_table;
+    int count_finds;
+    int count_deletes;
+    int c,k,res;   
+    #pragma omp parallel for num_threads(num_threads) shared(H) private(c,j,res,timer,k,value_table,op_table)
+    for(i=0;i<num_threads;i++){
+        value_table = (int *)malloc(sizeof(int)*(1000000/num_threads));
+        op_table = (int *)malloc(sizeof(int)*(1000000/num_threads));
+        for(j=0;j<(1000000/num_threads);j++) value_table[j]=rand()%100000;
+        for(j=0;j<inserts;j++) op_table[j]=1;
+        for(j=inserts;j<(inserts +finds);j++) op_table[j]=2;
+        for(j=(inserts+finds);j<(inserts+finds+deletes);j++) op_table[j]=3;
+        c=50;
+        res=0;
+        for(j=0;j<(1000000/num_threads);j++){
+            if (op_table[j]==2) res++;
+        }
+        shuffle(op_table,1000000/num_threads);
+        //printf(" res %d\n",res);
+        __sync_synchronize();
+        timer = timer_init(timer);
+        timer_start(timer);
+        for(j=0;j<(1000000/num_threads);j++){
+            for(k=0;k<c;k++);
+            if(op_table[j]==1) add(H,value_table[j],value_table[j],0);
+            else if(op_table[j]==2) res=contains(H,value_table[j],value_table[j]);
+            else res=delete(H,value_table[j],value_table[j]);
+            
+        }
+        timer_stop(timer);
+        printf("%thread %d timer %lf\n",omp_get_thread_num(),timer_report_sec(timer));
+    }
     /*
     for(i=0;i<55;i++){
         add(H,i,i,0);
     }
     */
-    print_set(H);
-    printf("%d \n",H->setSize);
+    //print_set(H);
+    //printf("%d \n",H->setSize);
     return;
 
     
