@@ -236,6 +236,10 @@ void shuffle(int *array, size_t n)
 void main(int argc,char * argv[]){
 
     int num_threads=atoi(argv[1]);
+    int inp_1=atoi(argv[2]);
+    int inp_2=atoi(argv[3]);
+    int inp_3=atoi(argv[4]);
+
     struct HashSet * H=(struct HashSet *) malloc(sizeof(struct HashSet));
     initialize(H,10);
     srand(time(NULL));
@@ -266,44 +270,48 @@ void main(int argc,char * argv[]){
     double result=timer_report_sec(timer);
     printf(" timer result %lf \n",result);
     */
-
-    int finds=200000/num_threads;
-    int deletes=0/num_threads;
-    int inserts=800000/num_threads;
+    int c,k;
+    int op_count=1000000;
+    int finds=inp_1;
+    int deletes=inp_2;
+    int inserts=inp_3;
     timer_tt * timer;
-    int * value_table;
-    int * op_table;
-    int count_finds;
-    int count_deletes;
-    int c,k,res;   
-    #pragma omp parallel for num_threads(num_threads) shared(H) private(c,j,res,timer,k,value_table,op_table)
+    //int MAX_COUNT=100000;//NOTE!!!! we assume that count=10*MAX_SIZE
+    int value_table[op_count];
+    int op_table[op_count];
+
+    for(i=0;i<op_count;i++) value_table[i]=rand()%100000;
+
+    for(i=0;i<finds;i++) op_table[i]=1;
+    for(i=0;i<deletes;i++) op_table[finds+i]=2;
+    for(i=0;i<inserts;i++) op_table[finds+deletes+i]=3;
+    shuffle(op_table,op_count);
+
+    int segm=op_count/num_threads;
+    int indx,res;
+    double total_time=0;
+
+    #pragma omp parallel for num_threads(num_threads) shared(H,value_table,op_table) private(c,j,timer,res,k,indx) reduction(+:total_time)
     for(i=0;i<num_threads;i++){
-        value_table = (int *)malloc(sizeof(int)*(1000000/num_threads));
-        op_table = (int *)malloc(sizeof(int)*(1000000/num_threads));
-        for(j=0;j<(1000000/num_threads);j++) value_table[j]=rand()%100000;
-        for(j=0;j<inserts;j++) op_table[j]=1;
-        for(j=inserts;j<(inserts +finds);j++) op_table[j]=2;
-        for(j=(inserts+finds);j<(inserts+finds+deletes);j++) op_table[j]=3;
         c=50;
-        res=0;
-        for(j=0;j<(1000000/num_threads);j++){
-            if (op_table[j]==2) res++;
-        }
-        shuffle(op_table,1000000/num_threads);
-        //printf(" res %d\n",res);
-        __sync_synchronize();
         timer = timer_init(timer);
         timer_start(timer);
         for(j=0;j<(1000000/num_threads);j++){
             for(k=0;k<c;k++);
-            if(op_table[j]==1) add(H,value_table[j],value_table[j],0);
-            else if(op_table[j]==2) res=contains(H,value_table[j],value_table[j]);
-            else res=delete(H,value_table[j],value_table[j]);
-            
+            indx=(omp_get_thread_num()*segm+j)%op_count;
+            if(op_table[indx]==1) res=contains(H,value_table[indx],value_table[indx]);
+            else if(op_table[indx]==2) res=delete(H,value_table[indx],value_table[indx]);
+            else add(H,value_table[indx],value_table[indx],0);
+
         }
         timer_stop(timer);
+        total_time = timer_report_sec(timer);
         printf("%thread %d timer %lf\n",omp_get_thread_num(),timer_report_sec(timer));
     }
+
+    double avg_total_time=total_time/(double)num_threads;
+    printf("avg total time %lf\n",avg_total_time);
+
     /*
     for(i=0;i<55;i++){
         add(H,i,i,0);
